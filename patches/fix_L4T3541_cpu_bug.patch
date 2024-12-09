@@ -1,0 +1,43 @@
+--- no_change/Linux_for_Tegra/source/public/kernel/nvidia/drivers/media/platform/tegra/camera/vi/vi5_fops.c	2023-08-02 04:31:24.000000000 +0900
++++ fix/Linux_for_Tegra/source/public/kernel/nvidia/drivers/media/platform/tegra/camera/vi/vi5_fops.c	2024-12-05 18:40:17.336729943 +0900
+@@ -487,6 +487,7 @@
+ 	struct tegra_channel_buffer *buf)
+ {
+ 	int err = 0;
++	bool frame_err = false;
+ 	int vi_port = 0;
+ 	int gang_prev_frame_id = 0;
+ 	unsigned long flags;
+@@ -532,10 +533,10 @@
+ 					descr->status.err_data);
+ #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0)
+ 					buf->vb2_state = VB2_BUF_STATE_REQUEUEING;
++					goto done;
+ #else
+-					buf->vb2_state = VB2_BUF_STATE_ERROR;
++					frame_err = true;					
+ #endif
+-			goto done;
+ 			}
+ 		} else if (!vi_port) {
+ 			gang_prev_frame_id = descr->status.frame_id;
+@@ -567,7 +568,10 @@
+ #endif
+ 	vb->vb2_buf.timestamp = descr->status.sof_timestamp;
+ 
+-	buf->vb2_state = VB2_BUF_STATE_DONE;
++	if (frame_err)
++		buf->vb2_state = VB2_BUF_STATE_ERROR;
++	else
++		buf->vb2_state = VB2_BUF_STATE_DONE;
+ 	/* Read EOF from capture descriptor */
+ #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0)
+ 	ts = ns_to_timespec((s64)descr->status.eof_timestamp);
+@@ -580,7 +584,6 @@
+ 	trace_tegra_channel_capture_frame("eof", &ts);
+ #endif
+ 
+-done:
+ 	goto rel_buf;
+ 
+ uncorr_err:
